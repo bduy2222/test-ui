@@ -325,7 +325,7 @@ function Fynix:CreateWindow(cfg)
             local bd = Instance.new("TextLabel")
             bd.Size = UDim2.new(0.4, -15, 1, 0) bd.Position = UDim2.new(0.6, 0, 0, 0)
             bd.Text = bCfg.Description or "" bd.TextColor3 = Fynix.Themes.Darker.Sub
-            bd.Font = Enum.Font.SourceSans pc.TextSize = 12 bd.TextXAlignment = Enum.TextXAlignment.Right
+            bd.Font = Enum.Font.SourceSans bd.TextSize = 12 bd.TextXAlignment = Enum.TextXAlignment.Right
             bd.BackgroundTransparency = 1 bd.Parent = BFrame
 
             BFrame.MouseButton1Click:Connect(function()
