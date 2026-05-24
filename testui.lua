@@ -618,12 +618,24 @@ function Fluent:CreateWindow(settings)
             return SliderObj
         end
         
-        -- [[ COMPONENT: DROPDOWN & MULTI DROPDOWN ]]
+       -- [[ COMPONENT: DROPDOWN & MULTI DROPDOWN - FIXED ]]
         function TabObj:AddDropdown(id, dCfg)
             local DTitle = dCfg.Title or "Dropdown"
             local Values = dCfg.Values or {}
             local Multi = dCfg.Multi or false
-            local Default = Fluent.ConfigData[id] ~= nil and Fluent.ConfigData[id] or (dCfg.Default or (Multi and {} or 1))
+            
+            -- SỬA LOGIC KHỞI TẠO DEFAULT KHÔNG BỊ SAI KIỂU DỮ LIỆU
+            local Default = Fluent.ConfigData[id]
+            if Default == nil then
+                if Multi then
+                    Default = {}
+                    if typeof(dCfg.Default) == "table" then
+                        for _, v in pairs(dCfg.Default) do Default[v] = true end
+                    end
+                else
+                    Default = dCfg.Default or 1
+                end
+            end
             
             local DropFrame = Instance.new("Frame")
             DropFrame.Size = UDim2.new(1, 0, 0, 42)
@@ -710,7 +722,7 @@ function Fluent:CreateWindow(settings)
                 OCorner.CornerRadius = UDim.new(0, 4)
                 OCorner.Parent = OptBtn
                 
-                -- Khởi tạo đánh dấu trạng thái nếu là Multi Dropdown
+                -- Kiểm tra bôi màu phần tử được chọn ban đầu
                 if Multi and typeof(DropdownObj.Value) == "table" and DropdownObj.Value[valName] then
                     OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
                 elseif not Multi and DropdownObj.Value == index then
@@ -725,7 +737,10 @@ function Fluent:CreateWindow(settings)
                         end
                         OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
                         Open = false
-                        TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 42)}):Play()
+                        
+                        local t = TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 42)})
+                        t:Play()
+                        
                         RefreshDisplay()
                         DropdownObj.ChangedCallback(DropdownObj.Value)
                     else
@@ -742,21 +757,34 @@ function Fluent:CreateWindow(settings)
                 end)
             end
             
-            SelectionDisplay.MouseButton1Click:Connect(function()
+            -- [THAY ĐỔI QUAN TRỌNG]: ÉP CANVAS VÀ LAYOUT CỦA TABPAGE PHẢI TÍNH LẠI DIỆN TÍCH KHI ĐANG TWEEN
+            local function ToggleDropdown()
                 Open = not Open
+                local targetSize
                 if Open then
-                    TweenService:Create(DropFrame, TweenInfo.new(0.25, Enum.EasingStyle.QuartOut), {Size = UDim2.new(1, 0, 0, 50 + (#Values * 30))}):Play()
+                    -- Tính toán chính xác độ cao cần mở rộng dựa vào số lượng Item
+                    targetSize = UDim2.new(1, 0, 0, 50 + (#Values * 28) + 10)
                 else
-                    TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 42)}):Play()
+                    targetSize = UDim2.new(1, 0, 0, 42)
                 end
-            end)
-            
-            -- Thiết lập giá trị mặc định cho Multi khi chạy lần đầu
-            if Multi and typeof(Default) == "table" then
-                local initTable = {}
-                for _, v in pairs(Default) do initTable[v] = true end
-                DropdownObj.Value = initTable
+                
+                local tween = TweenService:Create(DropFrame, TweenInfo.new(0.25, Enum.EasingStyle.QuartOut), {Size = targetSize})
+                tween:Play()
+                
+                -- Vòng lặp siêu nhỏ ép giao diện chính thay đổi CanvasSize liên tục cho tới khi Tween xong hẳn (Tránh kẹt UI)
+                local connection
+                connection = RunService.Heartbeat:Connect(function()
+                    if tween.PlaybackState == Enum.TweenStatus.Playing then
+                        -- Kích hoạt ép Layout cha reload vị trí nút bấm liền kề bên dưới
+                        PageLayout:AddTag("ForcedUpdate")
+                        PageLayout:RemoveTag("ForcedUpdate")
+                    else
+                        connection:Disconnect()
+                    end
+                end)
             end
+            
+            SelectionDisplay.MouseButton1Click:Connect(ToggleDropdown)
             
             RefreshDisplay()
             
