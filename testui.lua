@@ -1,775 +1,593 @@
--- [[ THƯ VIỆN UI CHUYÊN NGHIỆP - FIXED DROPDOWN CORES ]]
--- Tác giả: .matjias
+-- [[ FYNIX HUB PREMIUM UI LIBRARY ]]
+-- CHÚ Ý: Chạy mượt mà trên tất cả Executor hỗ trợ writefile/readfile/json
 
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local TS = game:GetService("TweenService")
+local HS = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
-local Fluent = {
+-- 1. XÓA UI CŨ TRƯỚC KHI CHẠY (Chống trùng lặp bộ nhớ)
+if game:GetService("CoreGui"):FindFirstChild("FynixUIFrame") then
+    game:GetService("CoreGui").FynixUIFrame:Destroy()
+elseif Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("FynixUIFrame") then
+    Players.LocalPlayer.PlayerGui.FynixUIFrame:Destroy()
+end
+
+local Fynix = {
+    ActiveNotifs = {},
     Options = {},
     Themes = {
         Darker = {
-            Background = Color3.fromRGB(15, 15, 18),
-            Topbar = Color3.fromRGB(22, 22, 26),
-            Sidebar = Color3.fromRGB(18, 18, 22),
-            Accent = Color3.fromRGB(0, 140, 255),
-            Text = Color3.fromRGB(255, 255, 255),
-            SubText = Color3.fromRGB(160, 160, 165),
-            Element = Color3.fromRGB(25, 25, 30),
-            ToggleOn = Color3.fromRGB(45, 210, 90),
-            ToggleOff = Color3.fromRGB(60, 60, 65)
+            Bg = Color3.fromRGB(11, 11, 14),
+            Top = Color3.fromRGB(16, 16, 22),
+            Comp = Color3.fromRGB(20, 20, 26),
+            Txt = Color3.fromRGB(245, 245, 250),
+            Sub = Color3.fromRGB(140, 140, 150),
+            G1 = Color3.fromRGB(0, 215, 255), -- Cyan Wave
+            G2 = Color3.fromRGB(160, 40, 255)  -- Purple Wave
         }
     },
-    ActiveNotifications = {},
-    ConfigData = {}
+    CfgFolder = "Fynix_Configs",
+    CfgFile = "default.json"
 }
+_G.Options = Fynix.Options
 
--- Hệ thống quản lý File Config
-local function writefile_safe(folder, file, data)
-    if writefile and makefolder then
-        pcall(function()
-            makefolder(folder)
-            writefile(folder .. "/" .. file .. ".json", HttpService:JSONEncode(data))
-        end)
+-- [[ AUTO SAVE & LOAD CONFIG LOGIC ]]
+local function SaveConfig()
+    if not Fynix.CfgFolder or not Fynix.CfgFile then return end
+    local data = {}
+    for k, v in pairs(Fynix.Options) do
+        data[k] = v.Value
     end
-end
-
-local function readfile_safe(folder, file)
-    if readfile then
-        local success, result = pcall(function()
-            return HttpService:JSONDecode(readfile(folder .. "/" .. file .. ".json"))
-        end)
-        if success then return result end
-    end
-    return nil
-end
-
--- Hiệu ứng sóng Gradient chuyển động thời gian thực
-local function ApplyGradientWave(uiObject)
-    local UIGradient = Instance.new("UIGradient")
-    UIGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 140, 255)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(130, 50, 250)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 140, 255))
-    })
-    UIGradient.Parent = uiObject
-    
-    task.spawn(function()
-        local offset = 0
-        while RunService.RenderStepped:Wait() do
-            offset = offset + 0.015
-            if offset > 1 then offset = 0 end
-            UIGradient.Offset = Vector2.new(offset, 0)
-        end
+    pcall(function()
+        if not isfolder(Fynix.CfgFolder) then makefolder(Fynix.CfgFolder) end
+        writefile(Fynix.CfgFolder .. "/" .. Fynix.CfgFile, HS:JSONEncode(data))
     end)
 end
 
--- Hệ thống Notification xếp chồng thông minh
-function Fluent:Notify(cfg)
-    local TitleText = cfg.Title or "Notification"
-    local ContentText = cfg.Content or ""
-    local SubContentText = cfg.SubContent or ""
-    local Duration = cfg.Duration or nil
-    
-    local CoreGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-    local TargetGui = CoreGui:FindFirstChild("FluentUIFrame")
-    if not TargetGui then return end
-    
-    local NotifyFrame = Instance.new("Frame")
-    NotifyFrame.Size = UDim2.new(0, 260, 0, 75)
-    NotifyFrame.Position = UDim2.new(1, 300, 0.85, 0)
-    NotifyFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-    NotifyFrame.BorderSizePixel = 0
-    NotifyFrame.Parent = TargetGui
-    
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 6)
-    UICorner.Parent = NotifyFrame
-    
-    local Stroke = Instance.new("UIStroke")
-    Stroke.Color = Color3.fromRGB(45, 45, 50)
-    Stroke.Thickness = 1
-    Stroke.Parent = NotifyFrame
-    
-    local nTitle = Instance.new("TextLabel")
-    nTitle.Size = UDim2.new(1, -20, 0, 25)
-    nTitle.Position = UDim2.new(0, 12, 0, 4)
-    nTitle.Font = Enum.Font.SourceSansBold
-    nTitle.Text = TitleText
-    nTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nTitle.TextSize = 14
-    nTitle.TextXAlignment = Enum.TextXAlignment.Left
-    nTitle.BackgroundTransparency = 1
-    nTitle.Parent = NotifyFrame
-    
-    local nContent = Instance.new("TextLabel")
-    nContent.Size = UDim2.new(1, -20, 0, 20)
-    nContent.Position = UDim2.new(0, 12, 0, 26)
-    nContent.Font = Enum.Font.SourceSans
-    nContent.Text = ContentText
-    nContent.TextColor3 = Color3.fromRGB(200, 200, 205)
-    nContent.TextSize = 13
-    nContent.TextXAlignment = Enum.TextXAlignment.Left
-    nContent.BackgroundTransparency = 1
-    nContent.Parent = NotifyFrame
-
-    if SubContentText ~= "" then
-        local nSub = Instance.new("TextLabel")
-        nSub.Size = UDim2.new(1, -20, 0, 15)
-        nSub.Position = UDim2.new(0, 12, 0, 48)
-        nSub.Font = Enum.Font.SourceSansItalic
-        nSub.Text = SubContentText
-        nSub.TextColor3 = Color3.fromRGB(140, 140, 145)
-        nSub.TextSize = 11
-        nSub.TextXAlignment = Enum.TextXAlignment.Left
-        nSub.BackgroundTransparency = 1
-        nSub.Parent = NotifyFrame
-    end
-
-    for _, activeNotify in pairs(Fluent.ActiveNotifications) do
-        if activeNotify and activeNotify.Parent then
-            local currentPos = activeNotify.Position
-            TweenService:Create(activeNotify, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Position = UDim2.new(currentPos.X.Scale, currentPos.X.Offset, currentPos.Y.Scale, currentPos.Y.Offset - 85)
-            }):Play()
-        end
-    end
-    
-    table.insert(Fluent.ActiveNotifications, NotifyFrame)
-    
-    TweenService:Create(NotifyFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(1, -280, 0.85, 0)
-    }):Play()
-    
-    if Duration then
-        task.delay(Duration, function()
-            if NotifyFrame and NotifyFrame.Parent then
-                TweenService:Create(NotifyFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-                    Position = UDim2.new(1, 300, NotifyFrame.Position.Y.Scale, NotifyFrame.Position.Y.Offset),
-                    BackgroundTransparency = 1
-                }):Play()
-                task.wait(0.3)
-                local idx = table.find(Fluent.ActiveNotifications, NotifyFrame)
-                if idx then table.remove(Fluent.ActiveNotifications, idx) end
-                NotifyFrame:Destroy()
-            end
-        end)
-    end
-end
-
--- Hàm khởi tạo Cửa sổ chính
-function Fluent:CreateWindow(settings)
-    local WindowName = settings.Title or "UI Library"
-    local SubTitleText = settings.SubTitle or "by Studio"
-    local TabWidth = settings.TabWidth or 160
-    local WindowSize = settings.Size or UDim2.fromOffset(580, 460)
-    local FolderName = settings.Config and settings.Config.Foulder or "FluentConfig"
-    local FileName = settings.Config and settings.Config.File or "default"
-    local MinimizeKey = settings.MinimizeKey or Enum.KeyCode.LeftControl
-    
-    Fluent.ConfigData = readfile_safe(FolderName, FileName) or {}
-    
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "FluentUIFrame"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-    
-    local MainFrame = Instance.new("Frame")
-    MainFrame.Size = WindowSize
-    MainFrame.Position = UDim2.new(0.5, -WindowSize.X.Offset/2, 0.5, -WindowSize.Y.Offset/2)
-    MainFrame.BackgroundColor3 = Fluent.Themes.Darker.Background
-    MainFrame.BorderSizePixel = 0
-    MainFrame.Active = true
-    MainFrame.Draggable = true
-    MainFrame.Parent = ScreenGui
-    
-    local MainCorner = Instance.new("UICorner")
-    MainCorner.CornerRadius = UDim.new(0, 8)
-    MainCorner.Parent = MainFrame
-    
-    local Topbar = Instance.new("Frame")
-    Topbar.Size = UDim2.new(1, 0, 0, 40)
-    Topbar.BackgroundColor3 = Fluent.Themes.Darker.Topbar
-    Topbar.BorderSizePixel = 0
-    Topbar.Parent = MainFrame
-    
-    local TopCorner = Instance.new("UICorner")
-    TopCorner.CornerRadius = UDim.new(0, 8)
-    TopCorner.Parent = Topbar
-    
-    local WaveLine = Instance.new("Frame")
-    WaveLine.Size = UDim2.new(1, 0, 0, 2)
-    WaveLine.Position = UDim2.new(0, 0, 1, -2)
-    WaveLine.BorderSizePixel = 0
-    WaveLine.Parent = Topbar
-    ApplyGradientWave(WaveLine)
-    
-    local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Size = UDim2.new(0, 200, 1, 0)
-    TitleLabel.Position = UDim2.fromOffset(15, 0)
-    TitleLabel.Text = WindowName .. " <font color='rgb(150,150,160)'>" .. SubTitleText .. "</font>"
-    TitleLabel.TextColor3 = Fluent.Themes.Darker.Text
-    TitleLabel.Font = Enum.Font.SourceSansBold
-    TitleLabel.TextSize = 16
-    TitleLabel.RichText = true
-    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Parent = Topbar
-    
-    local Sidebar = Instance.new("ScrollingFrame")
-    Sidebar.Size = UDim2.new(0, TabWidth, 1, -40)
-    Sidebar.Position = UDim2.fromOffset(0, 40)
-    Sidebar.BackgroundColor3 = Fluent.Themes.Darker.Sidebar
-    Sidebar.BorderSizePixel = 0
-    Sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
-    Sidebar.ScrollBarThickness = 0
-    Sidebar.Parent = MainFrame
-    
-    local SideLayout = Instance.new("UIListLayout")
-    SideLayout.Padding = UDim.new(0, 4)
-    SideLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    SideLayout.Parent = Sidebar
-    
-    local SidePadding = Instance.new("UIPadding")
-    SidePadding.PaddingTop = UDim.new(0, 10)
-    SidePadding.PaddingLeft = UDim.new(0, 8)
-    SidePadding.PaddingRight = UDim.new(0, 8)
-    SidePadding.Parent = Sidebar
-    
-    local Container = Instance.new("Frame")
-    Container.Size = UDim2.new(1, -TabWidth, 1, -40)
-    Container.Position = UDim2.fromOffset(TabWidth, 40)
-    Container.BackgroundTransparency = 1
-    Container.Parent = MainFrame
-
-    UserInputService.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.KeyCode == MinimizeKey then
-            ScreenGui.Enabled = not ScreenGui.Enabled
-        end
-    end)
-    
-    local WindowObj = { CurrentTab = nil, Tabs = {} }
-    
-    function WindowObj:AddTab(tabCfg)
-        local TabTitle = tabCfg.Title or "Tab"
-        local TabIcon = tabCfg.Icon or ""
-        
-        local TabPage = Instance.new("ScrollingFrame")
-        TabPage.Size = UDim2.new(1, 0, 1, 0)
-        TabPage.BackgroundTransparency = 1
-        TabPage.Visible = false
-        TabPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-        TabPage.ScrollBarThickness = 3
-        TabPage.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 65)
-        TabPage.Parent = Container
-        
-        local PageLayout = Instance.new("UIListLayout")
-        PageLayout.Padding = UDim.new(0, 6)
-        PageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        PageLayout.Parent = TabPage
-        
-        local PagePadding = Instance.new("UIPadding")
-        PagePadding.PaddingTop = UDim.new(0, 12)
-        PagePadding.PaddingLeft = UDim.new(0, 12)
-        PagePadding.PaddingRight = UDim.new(0, 12)
-        PagePadding.Parent = TabPage
-        
-        PageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            TabPage.CanvasSize = UDim2.new(0, 0, 0, PageLayout.AbsoluteContentSize.Y + 25)
-        end)
-        
-        local TabButton = Instance.new("TextButton")
-        TabButton.Size = UDim2.new(1, 0, 0, 34)
-        TabButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
-        TabButton.BackgroundTransparency = 1
-        TabButton.Text = (TabIcon ~= "" and TabIcon .. "  " or "") .. TabTitle
-        TabButton.TextColor3 = Fluent.Themes.Darker.SubText
-        TabButton.Font = Enum.Font.SourceSansBold
-        TabButton.TextSize = 14
-        TabButton.TextXAlignment = Enum.TextXAlignment.Left
-        TabButton.Parent = Sidebar
-        
-        local ButtonCorner = Instance.new("UICorner")
-        ButtonCorner.CornerRadius = UDim.new(0, 5)
-        ButtonCorner.Parent = TabButton
-        
-        local ButtonPadding = Instance.new("UIPadding")
-        ButtonPadding.PaddingLeft = UDim.new(0, 12)
-        ButtonPadding.Parent = TabButton
-        
-        local function Select()
-            if WindowObj.CurrentTab then
-                WindowObj.CurrentTab.Page.Visible = false
-                WindowObj.CurrentTab.Button.TextColor3 = Fluent.Themes.Darker.SubText
-                TweenService:Create(WindowObj.CurrentTab.Button, TweenInfo.new(0.2), {BackgroundTransparency = 1}):Play()
-            end
-            WindowObj.CurrentTab = { Page = TabPage, Button = TabButton }
-            TabPage.Visible = true
-            TabButton.TextColor3 = Fluent.Themes.Darker.Text
-            TweenService:Create(TabButton, TweenInfo.new(0.2), {BackgroundTransparency = 0.8, BackgroundColor3 = Fluent.Themes.Darker.Accent}):Play()
-        end
-        
-        TabButton.MouseButton1Click:Connect(Select)
-        if WindowObj.CurrentTab == nil then Select() end
-        
-        local TabObj = {}
-        
-        -- [[ PARAGRAPH COMPONENT ]]
-        function TabObj:AddParagraph(pCfg)
-            local PTitle = pCfg.Title or "Paragraph"
-            local PContent = pCfg.Content or ""
-            
-            local PFrame = Instance.new("Frame")
-            PFrame.Size = UDim2.new(1, 0, 0, 55)
-            PFrame.BackgroundColor3 = Fluent.Themes.Darker.Element
-            PFrame.BorderSizePixel = 0
-            PFrame.Parent = TabPage
-            
-            local PCorner = Instance.new("UICorner")
-            PCorner.CornerRadius = UDim.new(0, 6)
-            PCorner.Parent = PFrame
-            
-            local LabelTitle = Instance.new("TextLabel")
-            LabelTitle.Size = UDim2.new(1, -20, 0, 22)
-            LabelTitle.Position = UDim2.fromOffset(12, 4)
-            LabelTitle.Text = PTitle
-            LabelTitle.TextColor3 = Fluent.Themes.Darker.Text
-            LabelTitle.Font = Enum.Font.SourceSansBold
-            LabelTitle.TextSize = 14
-            LabelTitle.TextXAlignment = Enum.TextXAlignment.Left
-            LabelTitle.BackgroundTransparency = 1
-            LabelTitle.Parent = PFrame
-            
-            local LabelDesc = Instance.new("TextLabel")
-            LabelDesc.Size = UDim2.new(1, -20, 0, 25)
-            LabelDesc.Position = UDim2.fromOffset(12, 24)
-            LabelDesc.Text = PContent
-            LabelDesc.TextColor3 = Fluent.Themes.Darker.SubText
-            LabelDesc.Font = Enum.Font.SourceSans
-            LabelDesc.TextSize = 13
-            LabelDesc.TextXAlignment = Enum.TextXAlignment.Left
-            LabelDesc.BackgroundTransparency = 1
-            LabelDesc.Parent = PFrame
-            
-            local PInteract = {}
-            function PInteract:SetDesc(newText)
-                LabelTitle.Text = newText
-            end
-            return PInteract
-        end
-        
-        -- [[ BUTTON COMPONENT ]]
-        function TabObj:AddButton(bCfg)
-            local BTitle = bCfg.Title or "Button"
-            local BDesc = bCfg.Description or ""
-            local Callback = bCfg.Callback or function() end
-            
-            local BtnFrame = Instance.new("Frame")
-            BtnFrame.Size = UDim2.new(1, 0, 0, 42)
-            BtnFrame.BackgroundColor3 = Fluent.Themes.Darker.Element
-            BtnFrame.BorderSizePixel = 0
-            BtnFrame.Parent = TabPage
-            
-            local BCorner = Instance.new("UICorner")
-            BCorner.CornerRadius = UDim.new(0, 6)
-            BCorner.Parent = BtnFrame
-            
-            local TextLabel = Instance.new("TextLabel")
-            TextLabel.Size = UDim2.new(0.6, 0, 1, 0)
-            TextLabel.Position = UDim2.fromOffset(12, 0)
-            TextLabel.Text = BTitle .. (BDesc ~= "" and " <font color='rgb(130,130,135)'>- " .. BDesc .. "</font>" or "")
-            TextLabel.TextColor3 = Fluent.Themes.Darker.Text
-            TextLabel.Font = Enum.Font.SourceSansBold
-            TextLabel.TextSize = 14
-            TextLabel.RichText = true
-            TextLabel.TextXAlignment = Enum.TextXAlignment.Left
-            TextLabel.BackgroundTransparency = 1
-            TextLabel.Parent = BtnFrame
-            
-            local ClickBtn = Instance.new("TextButton")
-            ClickBtn.Size = UDim2.new(0, 80, 0, 26)
-            ClickBtn.Position = UDim2.new(1, -92, 0.5, -13)
-            ClickBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-            ClickBtn.Text = "Click"
-            ClickBtn.TextColor3 = Color3.fromRGB(240, 240, 245)
-            ClickBtn.Font = Enum.Font.SourceSansBold
-            ClickBtn.TextSize = 13
-            ClickBtn.Parent = BtnFrame
-            
-            local CCorner = Instance.new("UICorner")
-            CCorner.CornerRadius = UDim.new(0, 4)
-            CCorner.Parent = ClickBtn
-            
-            ClickBtn.MouseButton1Click:Connect(function()
-                TweenService:Create(ClickBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, 76, 0, 24), Position = UDim2.new(1, -90, 0.5, -12)}):Play()
-                task.wait(0.08)
-                TweenService:Create(ClickBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, 80, 0, 26), Position = UDim2.new(1, -92, 0.5, -13)}):Play()
-                Callback()
-            end)
-        end
-        
-        -- [[ TOGGLE COMPONENT (iOS ANIMATION) ]]
-        function TabObj:AddToggle(id, tCfg)
-            local TTitle = tCfg.Title or "Toggle"
-            local Default = Fluent.ConfigData[id] ~= nil and Fluent.ConfigData[id] or (tCfg.Default or false)
-            
-            local TFrame = Instance.new("Frame")
-            TFrame.Size = UDim2.new(1, 0, 0, 42)
-            TFrame.BackgroundColor3 = Fluent.Themes.Darker.Element
-            TFrame.Parent = TabPage
-            
-            local TCorner = Instance.new("UICorner")
-            TCorner.CornerRadius = UDim.new(0, 6)
-            TCorner.Parent = TFrame
-            
-            local TextLabel = Instance.new("TextLabel")
-            TextLabel.Size = UDim2.new(1, -100, 1, 0)
-            TextLabel.Position = UDim2.fromOffset(12, 0)
-            TextLabel.Text = TTitle
-            TextLabel.TextColor3 = Fluent.Themes.Darker.Text
-            TextLabel.Font = Enum.Font.SourceSansBold
-            TextLabel.TextSize = 14
-            TextLabel.TextXAlignment = Enum.TextXAlignment.Left
-            TextLabel.BackgroundTransparency = 1
-            TextLabel.Parent = TFrame
-            
-            local Switch = Instance.new("TextButton")
-            Switch.Size = UDim2.new(0, 42, 0, 22)
-            Switch.Position = UDim2.new(1, -54, 0.5, -11)
-            Switch.BackgroundColor3 = Default and Fluent.Themes.Darker.ToggleOn or Fluent.Themes.Darker.ToggleOff
-            Switch.Text = ""
-            Switch.Parent = TFrame
-            
-            local SCorner = Instance.new("UICorner")
-            SCorner.CornerRadius = UDim.new(1, 0)
-            SCorner.Parent = Switch
-            
-            local Circle = Instance.new("Frame")
-            Circle.Size = UDim2.new(0, 16, 0, 16)
-            Circle.Position = Default and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-            Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            Circle.Parent = Switch
-            
-            local CCorner = Instance.new("UICorner")
-            CCorner.CornerRadius = UDim.new(1, 0)
-            CCorner.Parent = Circle
-            
-            local ToggleObj = { Value = Default, ChangedCallback = function() end }
-            Fluent.Options[id] = ToggleObj
-            
-            local function UpdateVisuals()
-                if ToggleObj.Value then
-                    TweenService:Create(Switch, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {BackgroundColor3 = Fluent.Themes.Darker.ToggleOn}):Play()
-                    TweenService:Create(Circle, TweenInfo.new(0.25, Enum.EasingStyle.Back), {Position = UDim2.new(1, -19, 0.5, -8)}):Play()
-                else
-                    TweenService:Create(Switch, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {BackgroundColor3 = Fluent.Themes.Darker.ToggleOff}):Play()
-                    TweenService:Create(Circle, TweenInfo.new(0.25, Enum.EasingStyle.Back), {Position = UDim2.new(0, 3, 0.5, -8)}):Play()
+local function LoadConfig()
+    pcall(function()
+        local path = Fynix.CfgFolder .. "/" .. Fynix.CfgFile
+        if isfile(path) then
+            local data = HS:JSONDecode(readfile(path))
+            for k, v in pairs(data) do
+                if Fynix.Options[k] then
+                    Fynix.Options[k]:SetValue(v)
                 end
-                Fluent.ConfigData[id] = ToggleObj.Value
-                writefile_safe(FolderName, FileName, Fluent.ConfigData)
             end
-            
-            Switch.MouseButton1Click:Connect(function()
-                ToggleObj.Value = not ToggleObj.Value
-                UpdateVisuals()
-                ToggleObj.ChangedCallback(ToggleObj.Value)
-            end)
-            
-            function ToggleObj:OnChanged(cb)
-                ToggleObj.ChangedCallback = cb
-                cb(ToggleObj.Value)
-            end
-            
-            return ToggleObj
         end
-        
-        -- [[ SLIDER COMPONENT ]]
-        function TabObj:AddSlider(id, sCfg)
-            local STitle = sCfg.Title or "Slider"
-            local Min = sCfg.Min or 0
-            local Max = sCfg.Max or 100
-            local Rounding = sCfg.Rounding or 1
-            local Default = Fluent.ConfigData[id] ~= nil and Fluent.ConfigData[id] or (sCfg.Default or Min)
-            
-            local SFrame = Instance.new("Frame")
-            SFrame.Size = UDim2.new(1, 0, 0, 50)
-            SFrame.BackgroundColor3 = Fluent.Themes.Darker.Element
-            SFrame.Parent = TabPage
-            
-            local SCorner = Instance.new("UICorner")
-            SCorner.CornerRadius = UDim.new(0, 6)
-            SCorner.Parent = SFrame
-            
-            local Label = Instance.new("TextLabel")
-            Label.Size = UDim2.new(0.5, 0, 0, 20)
-            Label.Position = UDim2.fromOffset(12, 4)
-            Label.Text = STitle
-            Label.TextColor3 = Fluent.Themes.Darker.Text
-            Label.Font = Enum.Font.SourceSansBold
-            Label.TextSize = 14
-            Label.TextXAlignment = Enum.TextXAlignment.Left
-            Label.BackgroundTransparency = 1
-            Label.Parent = SFrame
-            
-            local InputBox = Instance.new("TextBox")
-            InputBox.Size = UDim2.new(0, 45, 0, 20)
-            InputBox.Position = UDim2.new(1, -57, 0, 6)
-            InputBox.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-            InputBox.Text = tostring(Default)
-            InputBox.TextColor3 = Fluent.Themes.Darker.Text
-            InputBox.Font = Enum.Font.SourceSansBold
-            InputBox.TextSize = 13
-            InputBox.Parent = SFrame
-            
-            local IBCorner = Instance.new("UICorner")
-            IBCorner.CornerRadius = UDim.new(0, 4)
-            IBCorner.Parent = InputBox
-            
-            local Track = Instance.new("Frame")
-            Track.Size = UDim2.new(1, -24, 0, 4)
-            Track.Position = UDim2.new(0, 12, 1, -12)
-            Track.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-            Track.BorderSizePixel = 0
-            Track.Parent = SFrame
-            
-            local Fill = Instance.new("Frame")
-            Fill.Size = UDim2.new((Default - Min) / (Max - Min), 0, 1, 0)
-            Fill.BackgroundColor3 = Fluent.Themes.Darker.Accent
-            Fill.BorderSizePixel = 0
-            Fill.Parent = Track
-            
-            local SliderObj = { Value = Default, ChangedCallback = function() end }
-            Fluent.Options[id] = SliderObj
-            
-            local function UpdateSliderPosition(percent)
-                percent = math.clamp(percent, 0, 1)
-                local exactValue = Min + (Max - Min) * percent
-                local mult = 10 ^ Rounding
-                local roundedValue = math.floor(exactValue * mult + 0.5) / mult
-                
-                SliderObj.Value = roundedValue
-                Fill.Size = UDim2.new(percent, 0, 1, 0)
-                InputBox.Text = tostring(roundedValue)
-                
-                Fluent.ConfigData[id] = roundedValue
-                writefile_safe(FolderName, FileName, Fluent.ConfigData)
-                SliderObj.ChangedCallback(roundedValue)
+    end)
+end
+
+-- [[ UTILS: TẠO GRADIENT WAVE ]]
+local function ApplyWave(parent)
+    local UIGrad = Instance.new("UIGradient")
+    UIGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Fynix.Themes.Darker.G1),
+        ColorSequenceKeypoint.new(1, Fynix.Themes.Darker.G2)
+    })
+    UIGrad.Parent = parent
+    
+    -- Hiệu ứng sóng cuộn động
+    coroutine.wrap(function()
+        while parent and parent.Parent do
+            TS:Create(UIGrad, TweenInfo.new(3, Enum.EasingStyle.Linear), {Rotation = 360}):Play()
+            task.wait(3)
+            UIGrad.Rotation = 0
+        end
+    end)()
+    return UIGrad
+end
+
+-- [[ HỆ THỐNG NOTIFICATION CHUẨN XẾP CHỒNG ]]
+function Fynix:Notify(cfg)
+    local Target = ScreenGui or Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("FynixUIFrame")
+    if not Target then return end
+
+    local Box = Instance.new("Frame")
+    Box.Size = UDim2.fromOffset(280, 70)
+    Box.Position = UDim2.new(1, 300, 0.85, 0)
+    Box.BackgroundColor3 = Fynix.Themes.Darker.Comp
+    Box.ClipsDescendants = true
+    Box.Parent = Target
+
+    local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 8) bc.Parent = Box
+    local bs = Instance.new("UIStroke") bs.Thickness = 1.2 bs.Parent = Box ApplyWave(bs)
+
+    local tl = Instance.new("TextLabel")
+    tl.Size = UDim2.new(1, -20, 0, 22) tl.Position = UDim2.fromOffset(12, 6)
+    tl.Text = cfg.Title or "Notification" tl.TextColor3 = Fynix.Themes.Darker.Txt
+    tl.Font = Enum.Font.SourceSansBold tl.TextSize = 14 tl.TextXAlignment = Enum.TextXAlignment.Left
+    tl.BackgroundTransparency = 1 tl.Parent = Box
+
+    local cl = Instance.new("TextLabel")
+    cl.Size = UDim2.new(1, -20, 0, 18) cl.Position = UDim2.fromOffset(12, 26)
+    cl.Text = cfg.Content or "" cl.TextColor3 = Fynix.Themes.Darker.Sub
+    cl.Font = Enum.Font.SourceSans tl.TextSize = 13 cl.TextXAlignment = Enum.TextXAlignment.Left
+    cl.BackgroundTransparency = 1 cl.Parent = Box
+
+    if cfg.SubContent then
+        local sl = Instance.new("TextLabel")
+        sl.Size = UDim2.new(1, -20, 0, 15) sl.Position = UDim2.fromOffset(12, 45)
+        sl.Text = cfg.SubContent sl.TextColor3 = Fynix.Themes.Darker.Sub
+        sl.Font = Enum.Font.SourceSansItalic tl.TextSize = 11 tl.TextXAlignment = Enum.TextXAlignment.Left
+        sl.BackgroundTransparency = 1 sl.Parent = Box
+    end
+
+    local function Rearrange()
+        for i, n in ipairs(Fynix.ActiveNotifs) do
+            local offset = -(#Fynix.ActiveNotifs - i) * 80
+            TS:Create(n, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Position = UDim2.new(1, -295, 0.85, offset)}):Play()
+        end
+    end
+
+    table.insert(Fynix.ActiveNotifs, Box)
+    Rearrange()
+
+    if cfg.Duration then
+        task.delay(cfg.Duration, function()
+            local idx = table.find(Fynix.ActiveNotifs, Box)
+            if idx then table.remove(Fynix.ActiveNotifs, idx) end
+            TS:Create(Box, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {Position = UDim2.new(1, 300, 0.85, Box.Position.Y.Offset)}):Play()
+            task.wait(0.25) Box:Destroy() Rearrange()
+        end)
+    end
+end
+
+-- [[ TẠO WINDOW CHÍNH ]]
+function Fynix:CreateWindow(cfg)
+    Fynix.CfgFolder = cfg.Config and cfg.Config.Foulder or Fynix.CfgFolder
+    Fynix.CfgFile = cfg.Config and (cfg.Config.File .. ".json") or Fynix.CfgFile
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "FynixUIFrame"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = game:GetService("CoreGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
+
+    local OSize = cfg.Size or UDim2.fromOffset(580, 460)
+    local Main = Instance.new("Frame")
+    Main.Size = OSize
+    Main.Position = UDim2.new(0.5, -OSize.X.Offset/2, 0.5, -OSize.Y.Offset/2)
+    Main.BackgroundColor3 = Fynix.Themes.Darker.Bg
+    Main.ClipsDescendants = true
+    Main.Parent = ScreenGui
+
+    local mc = Instance.new("UICorner") mc.CornerRadius = UDim.new(0, 10) mc.Parent = Main
+    local ms = Instance.new("UIStroke") ms.Thickness = 1.5 ms.Parent = Main ApplyWave(ms)
+
+    -- Nút kích hoạt lại UI nhỏ hình vuông
+    local ToggleBindBtn = Instance.new("TextButton")
+    ToggleBindBtn.Size = UDim2.fromOffset(45, 45)
+    ToggleBindBtn.Position = UDim2.new(0, 15, 0.5, -22)
+    ToggleBindBtn.BackgroundColor3 = Fynix.Themes.Darker.Comp
+    ToggleBindBtn.Text = "🔥"
+    ToggleBindBtn.TextSize = 20
+    ToggleBindBtn.Visible = false
+    ToggleBindBtn.Parent = ScreenGui
+    local tc = Instance.new("UICorner") tc.CornerRadius = UDim.new(0, 8) tc.Parent = ToggleBindBtn
+    local ts = Instance.new("UIStroke") ts.Thickness = 1.2 ts.Parent = ToggleBindBtn ApplyWave(ts)
+
+    ToggleBindBtn.MouseButton1Click:Connect(function()
+        ToggleBindBtn.Visible = false
+        Main.Visible = true
+        Main:TweenSize(OSize, "Out", "Quart", 0.3, true)
+    end)
+
+    -- Topbar (Kéo thả)
+    local Top = Instance.new("TextButton")
+    Top.Size = UDim2.new(1, 0, 0, 42) Top.BackgroundTransparency = 1 Top.Text = "" Top.Parent = Main
+
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, -150, 1, 0) Title.Position = UDim2.fromOffset(15, 0)
+    Title.Text = (cfg.Title or "Fynix Hub") .. " <font color='#BCBCFF'>" .. (cfg.SubTitle or "") .. "</font>"
+    Title.TextColor3 = Fynix.Themes.Darker.Txt Title.RichText = true
+    Title.Font = Enum.Font.SourceSansBold Title.TextSize = 16 Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.BackgroundTransparency = 1 Title.Parent = Top
+
+    -- Nút Đóng (X) & Thu Nhỏ (-)
+    local XBtn = Instance.new("TextButton")
+    XBtn.Size = UDim2.fromOffset(26, 26) XBtn.Position = UDim2.new(1, -34, 0, 8)
+    XBtn.BackgroundTransparency = 1 XBtn.Text = "×" XBtn.TextColor3 = Color3.fromRGB(150,150,155)
+    XBtn.TextSize = 22 XBtn.Font = Enum.Font.SourceSans XBtn.Parent = Top
+    XBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+
+    local MBtn = Instance.new("TextButton")
+    MBtn.Size = UDim2.fromOffset(26, 26) MBtn.Position = UDim2.new(1, -64, 0, 8)
+    MBtn.BackgroundTransparency = 1 MBtn.Text = "─" MBtn.TextColor3 = Color3.fromRGB(150,150,155)
+    MBtn.TextSize = 12 MBtn.Font = Enum.Font.SourceSansBold MBtn.Parent = Top
+    
+    MBtn.MouseButton1Click:Connect(function()
+        Main:TweenSize(UDim2.fromOffset(OSize.X.Offset, 0), "In", "Quart", 0.25, true, function()
+            Main.Visible = false
+            ToggleBindBtn.Visible = true
+        end)
+    end)
+
+    -- Logic Kéo thả
+    local drag, dragInput, start, startPos
+    Top.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            drag = true start = input.Position startPos = Main.Position
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then drag = false end end)
+        end
+    end)
+    Top.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+    end)
+    RS.RenderStepped:Connect(function()
+        if drag and dragInput then
+            local delta = dragInput.Position - start
+            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    -- Keybind Ẩn/Hiện nhanh UI
+    UIS.InputBegan:Connect(function(input, gpe)
+        if not gpe and input.KeyCode == (cfg.MinimizeKey or Enum.KeyCode.LeftControl) then
+            if Main.Visible then
+                Main:TweenSize(UDim2.fromOffset(OSize.X.Offset, 0), "In", "Quart", 0.2, true, function() Main.Visible = false ToggleBindBtn.Visible = true end)
+            else
+                ToggleBindBtn.Visible = false Main.Visible = true Main:TweenSize(OSize, "Out", "Quart", 0.2, true)
             end
-            
-            local IsDragging = false
+        end
+    end)
+
+    -- SideBar & Containers
+    local SBWidth = cfg.TabWidth or 160
+    local Sidebar = Instance.new("ScrollingFrame")
+    Sidebar.Size = UDim2.new(0, SBWidth, 1, -45) Sidebar.Position = UDim2.fromOffset(0, 45)
+    Sidebar.BackgroundTransparency = 1 Sidebar.BorderSizePixel = 0 Sidebar.ScrollBarThickness = 0 Sidebar.Parent = Main
+
+    local sbl = Instance.new("UIListLayout") sbl.Padding = UDim.new(0, 4) sbl.HorizontalAlignment = Enum.HorizontalAlignment.Center sbl.Parent = Sidebar
+
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, -SBWidth - 10, 1, -45) Container.Position = UDim2.fromOffset(SBWidth + 5, 45)
+    Container.BackgroundTransparency = 1 Container.Parent = Main
+
+    local WindowObj = { Tabs = {}, Current = nil }
+
+    function WindowObj:AddTab(tCfg)
+        local TabName = tCfg.Title or "Tab"
+        local Icon = tCfg.Icon or ""
+
+        local TBtn = Instance.new("TextButton")
+        TBtn.Size = UDim2.new(1, -16, 0, 34) TBtn.BackgroundColor3 = Fynix.Themes.Darker.Comp TBtn.BackgroundTransparency = 1
+        TBtn.Text = (Icon ~= "" and Icon .. "  " or "") .. TabName TBtn.TextColor3 = Fynix.Themes.Darker.Sub
+        TBtn.Font = Enum.Font.SourceSansBold TBtn.TextSize = 14 TBtn.Parent = Sidebar
+        local tc = Instance.new("UICorner") tc.CornerRadius = UDim.new(0, 6) tc.Parent = TBtn
+
+        local Page = Instance.new("ScrollingFrame")
+        Page.Size = UDim2.new(1, 0, 1, 0) Page.BackgroundTransparency = 1 Page.BorderSizePixel = 0
+        Page.ScrollBarThickness = 2 Page.ScrollBarImageColor3 = Color3.fromRGB(50,50,55) Page.Visible = false Page.Parent = Container
+
+        local pbl = Instance.new("UIListLayout") pbl.Padding = UDim.new(0, 6) pbl.HorizontalAlignment = Enum.HorizontalAlignment.Center pbl.Parent = Page
+        pbl:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            Page.CanvasSize = UDim2.new(0, 0, 0, pbl.AbsoluteContentSize.Y + 15)
+        end)
+
+        local TabObj = { Page = Page, TBtn = TBtn }
+
+        local function Select()
+            if WindowObj.Current then
+                WindowObj.Current.Page.Visible = false
+                WindowObj.Current.TBtn.BackgroundTransparency = 1
+                WindowObj.Current.TBtn.TextColor3 = Fynix.Themes.Darker.Sub
+            end
+            Page.Visible = true TBtn.BackgroundTransparency = 0 TBtn.TextColor3 = Fynix.Themes.Darker.Txt
+            WindowObj.Current = TabObj
+        end
+        TBtn.MouseButton1Click:Connect(Select)
+
+        if #WindowObj.Tabs == 0 then Select() end
+        table.insert(WindowObj.Tabs, TabObj)
+
+        -- ==========================================
+        -- COMPONENT: PARAGRAPH
+        -- ==========================================
+        function TabObj:AddParagraph(pCfg)
+            local PFrame = Instance.new("Frame")
+            PFrame.Size = UDim2.new(1, -10, 0, 50) PFrame.BackgroundColor3 = Fynix.Themes.Darker.Comp PFrame.Parent = Page
+            local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 6) cc.Parent = PFrame
+
+            local pt = Instance.new("TextLabel")
+            pt.Size = UDim2.new(1, -20, 0, 20) pt.Position = UDim2.fromOffset(10, 5)
+            pt.Text = pCfg.Title or "Paragraph" pt.TextColor3 = Fynix.Themes.Darker.Txt
+            pt.Font = Enum.Font.SourceSansBold pt.TextSize = 14 pt.TextXAlignment = Enum.TextXAlignment.Left
+            pt.BackgroundTransparency = 1 pt.Parent = PFrame
+
+            local pc = Instance.new("TextLabel")
+            pc.Size = UDim2.new(1, -20, 0, 20) pc.Position = UDim2.fromOffset(10, 23)
+            pc.Text = pCfg.Content or "" pc.TextColor3 = Fynix.Themes.Darker.Sub
+            pc.Font = Enum.Font.SourceSans pc.TextSize = 13 pc.TextXAlignment = Enum.TextXAlignment.Left
+            pc.BackgroundTransparency = 1 pc.Parent = PFrame
+
+            local ParaObj = {}
+            function ParaObj:SetDesc(txt) pt.Text = txt end
+            return ParaObj
+        end
+
+        -- ==========================================
+        -- COMPONENT: BUTTON
+        -- ==========================================
+        function TabObj:AddButton(bCfg)
+            local BFrame = Instance.new("TextButton")
+            BFrame.Size = UDim2.new(1, -10, 0, 42) BFrame.BackgroundColor3 = Fynix.Themes.Darker.Comp
+            BFrame.Text = "" BFrame.AutoButtonColor = false BFrame.Parent = Page
+            local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 6) cc.Parent = BFrame
+
+            local bt = Instance.new("TextLabel")
+            bt.Size = UDim2.new(0.6, 0, 1, 0) bt.Position = UDim2.fromOffset(10, 0)
+            bt.Text = bCfg.Title or "Button" bt.TextColor3 = Fynix.Themes.Darker.Txt
+            bt.Font = Enum.Font.SourceSansBold bt.TextSize = 14 bt.TextXAlignment = Enum.TextXAlignment.Left
+            bt.BackgroundTransparency = 1 bt.Parent = BFrame
+
+            local bd = Instance.new("TextLabel")
+            bd.Size = UDim2.new(0.4, -15, 1, 0) bd.Position = UDim2.new(0.6, 0, 0, 0)
+            bd.Text = bCfg.Description or "" bd.TextColor3 = Fynix.Themes.Darker.Sub
+            bd.Font = Enum.Font.SourceSans pc.TextSize = 12 bd.TextXAlignment = Enum.TextXAlignment.Right
+            bd.BackgroundTransparency = 1 bd.Parent = BFrame
+
+            BFrame.MouseButton1Click:Connect(function()
+                TS:Create(BFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(30,30,38)}):Play()
+                task.wait(0.1)
+                TS:Create(BFrame, TweenInfo.new(0.1), {BackgroundColor3 = Fynix.Themes.Darker.Comp}):Play()
+                if bCfg.Callback then bCfg.Callback() end
+            end)
+        end
+
+        -- ==========================================
+        -- COMPONENT: TOGGLE (ANIMATION IOS STYLE)
+        -- ==========================================
+        function TabObj:AddToggle(id, tCfg)
+            local TglObj = { Value = tCfg.Default or false, ChangeCallback = nil }
+
+            local TFrame = Instance.new("TextButton")
+            TFrame.Size = UDim2.new(1, -10, 0, 42) TFrame.BackgroundColor3 = Fynix.Themes.Darker.Comp
+            TFrame.Text = "" TFrame.AutoButtonColor = false TFrame.Parent = Page
+            local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 6) cc.Parent = TFrame
+
+            local tt = Instance.new("TextLabel")
+            tt.Size = UDim2.new(1, -60, 1, 0) tt.Position = UDim2.fromOffset(10, 0)
+            tt.Text = tCfg.Title or "Toggle" tt.TextColor3 = Fynix.Themes.Darker.Txt
+            tt.Font = Enum.Font.SourceSansBold tt.TextSize = 14 tt.TextXAlignment = Enum.TextXAlignment.Left
+            tt.BackgroundTransparency = 1 tt.Parent = TFrame
+
+            local Switch = Instance.new("Frame")
+            Switch.Size = UDim2.fromOffset(36, 20) Switch.Position = UDim2.new(1, -46, 0.5, -10)
+            Switch.BackgroundColor3 = Color3.fromRGB(45, 45, 50) Switch.Parent = TFrame
+            local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(1, 0) sc.Parent = Switch
+
+            local SliderDot = Instance.new("Frame")
+            SliderDot.Size = UDim2.fromOffset(16, 16) SliderDot.Position = UDim2.new(0, 2, 0.5, -8)
+            SliderDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255) SliderDot.Parent = Switch
+            local dc = Instance.new("UICorner") dc.CornerRadius = UDim.new(1, 0) dc.Parent = SliderDot
+
+            local function Update()
+                if TglObj.Value then
+                    TS:Create(Switch, TweenInfo.new(0.2), {BackgroundColor3 = Fynix.Themes.Darker.G1}):Play()
+                    TS:Create(SliderDot, TweenInfo.new(0.2), {Position = UDim2.new(1, -18, 0.5, -8)}):Play()
+                else
+                    TS:Create(Switch, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 45, 50)}):Play()
+                    TS:Create(SliderDot, TweenInfo.new(0.2), {Position = UDim2.new(0, 2, 0.5, -8)}):Play()
+                end
+                SaveConfig()
+                if TglObj.ChangeCallback then TglObj.ChangeCallback(TglObj.Value) end
+            end
+
+            TFrame.MouseButton1Click:Connect(function()
+                TglObj.Value = not TglObj.Value
+                Update()
+            end)
+
+            function TglObj:OnChanged(cb) TglObj.ChangeCallback = cb cb(TglObj.Value) end
+            function TglObj:SetValue(v) TglObj.Value = v Update() end
+
+            Fynix.Options[id] = TglObj
+            Update()
+            return TglObj
+        end
+
+        -- ==========================================
+        -- COMPONENT: SLIDER
+        -- ==========================================
+        function TabObj:AddSlider(id, sCfg)
+            local SldObj = { Value = sCfg.Default or sCfg.Min, ChangeCallback = nil }
+            local Min, Max = sCfg.Min or 0, sCfg.Max or 100
+            local Round = sCfg.Rounding or 1
+
+            local SFrame = Instance.new("Frame")
+            SFrame.Size = UDim2.new(1, -10, 0, 52) SFrame.BackgroundColor3 = Fynix.Themes.Darker.Comp SFrame.Parent = Page
+            local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 6) cc.Parent = SFrame
+
+            local st = Instance.new("TextLabel")
+            st.Size = UDim2.new(0.5, 0, 0, 22) st.Position = UDim2.fromOffset(10, 4)
+            st.Text = sCfg.Title or "Slider" st.TextColor3 = Fynix.Themes.Darker.Txt
+            st.Font = Enum.Font.SourceSansBold st.TextSize = 14 st.TextXAlignment = Enum.TextXAlignment.Left
+            st.BackgroundTransparency = 1 st.Parent = SFrame
+
+            -- Ô nhập kiêm hiển thị giá trị ở cuối thanh tiêu đề
+            local ValInput = Instance.new("TextBox")
+            ValInput.Size = UDim2.fromOffset(45, 18) ValInput.Position = UDim2.new(1, -55, 0, 6)
+            ValInput.BackgroundColor3 = Color3.fromRGB(30,30,35) ValInput.TextColor3 = Fynix.Themes.Darker.Txt
+            ValInput.Text = tostring(SldObj.Value) ValInput.Font = Enum.Font.SourceSansBold ValInput.TextSize = 12
+            ValInput.BorderSizePixel = 0 ValInput.ClearTextOnFocus = false ValInput.Parent = SFrame
+            local ic = Instance.new("UICorner") ic.CornerRadius = UDim.new(0, 4) ic.Parent = ValInput
+
+            local Track = Instance.new("TextButton")
+            Track.Size = UDim2.new(1, -20, 0, 6) Track.Position = UDim2.fromOffset(10, 34)
+            Track.BackgroundColor3 = Color3.fromRGB(40, 40, 45) Track.Text = "" Track.AutoButtonColor = false Track.Parent = SFrame
+            local tc = Instance.new("UICorner") tc.CornerRadius = UDim.new(1, 0) tc.Parent = Track
+
+            local Fill = Instance.new("Frame")
+            Fill.Size = UDim2.new(0, 0, 1, 0) Fill.BackgroundColor3 = Fynix.Themes.Darker.G1 Fill.Parent = Track
+            local fc = Instance.new("UICorner") fc.CornerRadius = UDim.new(1, 0) fc.Parent = Fill
+
+            local function Update(snap)
+                local perc = math.clamp((SldObj.Value - Min) / (Max - Min), 0, 1)
+                Fill.Size = UDim2.new(perc, 0, 1, 0)
+                ValInput.Text = tostring(math.floor(SldObj.Value * (10^Round) + 0.5) / (10^Round))
+                SaveConfig()
+                if SldObj.ChangeCallback then SldObj.ChangeCallback(SldObj.Value) end
+            end
+
+            local function Slide(input)
+                local res = math.clamp((input.Position.X - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
+                local rawVal = Min + res * (Max - Min)
+                SldObj.Value = math.floor(rawVal * (10^Round) + 0.5) / (10^Round)
+                Update()
+            end
+
+            local sDrag = false
             Track.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    IsDragging = true
-                    local mousePos = input.Position.X
-                    local percent = (mousePos - Track.AbsolutePosition.X) / Track.AbsoluteSize.X
-                    UpdateSliderPosition(percent)
+                    sDrag = true Slide(input)
                 end
             end)
-            
-            UserInputService.InputChanged:Connect(function(input)
-                if IsDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local mousePos = input.Position.X
-                    local percent = (mousePos - Track.AbsolutePosition.X) / Track.AbsoluteSize.X
-                    UpdateSliderPosition(percent)
-                end
+            UIS.InputChanged:Connect(function(input)
+                if sDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then Slide(input) end
             end)
-            
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    IsDragging = false
-                end
+            UIS.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then sDrag = false end
             end)
-            
-            InputBox.FocusLost:Connect(function()
-                local num = tonumber(InputBox.Text)
-                if num then
-                    num = math.clamp(num, Min, Max)
-                    local percent = (num - Min) / (Max - Min)
-                    UpdateSliderPosition(percent)
-                else
-                    InputBox.Text = tostring(SliderObj.Value)
-                end
+
+            ValInput.FocusLost:Connect(function()
+                local num = tonumber(ValInput.Text)
+                if num then SldObj.Value = math.clamp(num, Min, Max) end
+                Update()
             end)
-            
-            function SliderObj:OnChanged(cb)
-                SliderObj.ChangedCallback = cb
-                cb(SliderObj.Value)
-            end
-            
-            return SliderObj
+
+            function SldObj:OnChanged(cb) SldObj.ChangeCallback = cb cb(SldObj.Value) end
+            function SldObj:SetValue(v) SldObj.Value = math.clamp(v, Min, Max) Update() end
+
+            Fynix.Options[id] = SldObj
+            Update()
+            return SldObj
         end
-        
-        -- [[ DROPDOWN COMPONENT (FIXED CRASH) ]]
+
+        -- ==========================================
+        -- COMPONENT: DROPDOWN & MULTI DROPDOWN
+        -- ==========================================
         function TabObj:AddDropdown(id, dCfg)
-            local DTitle = dCfg.Title or "Dropdown"
-            local Values = dCfg.Values or {}
-            local Multi = dCfg.Multi or false
-            
-            local Default = Fluent.ConfigData[id]
-            if Default == nil then
-                if Multi then
-                    Default = {}
-                    if typeof(dCfg.Default) == "table" then
-                        for _, v in pairs(dCfg.Default) do Default[v] = true end
-                    end
-                else
-                    Default = dCfg.Default or 1
-                end
-            end
-            
-            local DropFrame = Instance.new("Frame")
-            DropFrame.Size = UDim2.new(1, 0, 0, 42)
-            DropFrame.BackgroundColor3 = Fluent.Themes.Darker.Element
-            DropFrame.ClipsDescendants = true
-            DropFrame.Parent = TabPage
-            
-            local DCorner = Instance.new("UICorner")
-            DCorner.CornerRadius = UDim.new(0, 6)
-            DCorner.Parent = DropFrame
-            
-            local TextLabel = Instance.new("TextLabel")
-            TextLabel.Size = UDim2.new(0.5, 0, 0, 42)
-            TextLabel.Position = UDim2.fromOffset(12, 0)
-            TextLabel.Text = DTitle
-            TextLabel.TextColor3 = Fluent.Themes.Darker.Text
-            TextLabel.Font = Enum.Font.SourceSansBold
-            TextLabel.TextSize = 14
-            TextLabel.TextXAlignment = Enum.TextXAlignment.Left
-            TextLabel.BackgroundTransparency = 1
-            TextLabel.Parent = DropFrame
-            
-            local SelectionDisplay = Instance.new("TextButton")
-            SelectionDisplay.Size = UDim2.new(0, 150, 0, 26)
-            SelectionDisplay.Position = UDim2.new(1, -162, 0, 8)
-            SelectionDisplay.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-            SelectionDisplay.Text = "Chọn..."
-            SelectionDisplay.TextColor3 = Fluent.Themes.Darker.SubText
-            SelectionDisplay.Font = Enum.Font.SourceSans
-            SelectionDisplay.TextSize = 13
-            SelectionDisplay.Parent = DropFrame
-            
-            local SCorner = Instance.new("UICorner")
-            SCorner.CornerRadius = UDim.new(0, 4)
-            SCorner.Parent = SelectionDisplay
-            
-            local OptionContainer = Instance.new("Frame")
-            OptionContainer.Size = UDim2.new(1, -24, 0, #Values * 28)
-            OptionContainer.Position = UDim2.fromOffset(12, 45)
-            OptionContainer.BackgroundTransparency = 1
-            OptionContainer.Parent = DropFrame
-            
-            local DropLayout = Instance.new("UIListLayout")
-            DropLayout.Padding = UDim.new(0, 2)
-            DropLayout.Parent = OptionContainer
-            
-            local DropdownObj = { Value = Default, ChangedCallback = function() end }
-            Fluent.Options[id] = DropdownObj
-            
-            local Open = false
-            
+            local DropObj = { 
+                Value = dCfg.Default or (dCfg.Multi and {} or dCfg.Values[1]), 
+                Values = dCfg.Values or {}, 
+                Multi = dCfg.Multi or false,
+                ChangeCallback = nil 
+            }
+
+            local DFrame = Instance.new("Frame")
+            DFrame.Size = UDim2.new(1, -10, 0, 42) DFrame.BackgroundColor3 = Fynix.Themes.Darker.Comp DFrame.ClipsDescendants = true DFrame.Parent = Page
+            local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 6) cc.Parent = DFrame
+
+            local ClickBtn = Instance.new("TextButton")
+            ClickBtn.Size = UDim2.new(1, 0, 0, 42) ClickBtn.BackgroundTransparency = 1 ClickBtn.Text = "" ClickBtn.Parent = DFrame
+
+            local dt = Instance.new("TextLabel")
+            dt.Size = UDim2.new(0.5, 0, 1, 0) dt.Position = UDim2.fromOffset(10, 0)
+            dt.Text = dCfg.Title or "Dropdown" dt.TextColor3 = Fynix.Themes.Darker.Txt
+            dt.Font = Enum.Font.SourceSansBold dt.TextSize = 14 dt.TextXAlignment = Enum.TextXAlignment.Left
+            dt.BackgroundTransparency = 1 dt.Parent = ClickBtn
+
+            local SelectedTxt = Instance.new("TextLabel")
+            SelectedTxt.Size = UDim2.new(0.5, -35, 1, 0) SelectedTxt.Position = UDim2.new(0.5, 0, 0, 0)
+            SelectedTxt.Text = "..." SelectedTxt.TextColor3 = Fynix.Themes.Darker.Sub
+            SelectedTxt.Font = Enum.Font.SourceSans SelectedTxt.TextSize = 13 SelectedTxt.TextXAlignment = Enum.TextXAlignment.Right
+            SelectedTxt.BackgroundTransparency = 1 SelectedTxt.Parent = ClickBtn
+
+            local Arrow = Instance.new("TextLabel")
+            Arrow.Size = UDim2.fromOffset(20, 42) Arrow.Position = UDim2.new(1, -25, 0, 0)
+            Arrow.Text = "▼" Arrow.TextColor3 = Fynix.Themes.Darker.Sub Arrow.TextSize = 12 Arrow.BackgroundTransparency = 1 Arrow.Parent = ClickBtn
+
+            local OptionList = Instance.new("ScrollingFrame")
+            OptionList.Size = UDim2.new(1, -10, 1, -46) OptionList.Position = UDim2.fromOffset(5, 44)
+            OptionList.BackgroundTransparency = 1 OptionList.BorderSizePixel = 0 OptionList.ScrollBarThickness = 2 OptionList.Parent = DFrame
+            local olayout = Instance.new("UIListLayout") olayout.Padding = UDim.new(0, 3) olayout.Parent = OptionList
+
+            local IsOpen = false
             local function RefreshDisplay()
-                if not Multi then
-                    local selectedText = Values[DropdownObj.Value] or tostring(DropdownObj.Value)
-                    SelectionDisplay.Text = selectedText
+                if DropObj.Multi then
+                    local selected = {}
+                    for k, v in pairs(DropObj.Value) do if v then table.insert(selected, k) end end
+                    SelectedTxt.Text = #selected > 0 and table.concat(selected, ", ") or "None"
                 else
-                    local selectedList = {}
-                    for k, v in pairs(DropdownObj.Value) do
-                        if v == true then table.insert(selectedList, k) end
-                    end
-                    if #selectedList == 0 then
-                        SelectionDisplay.Text = "Trống"
-                    else
-                        SelectionDisplay.Text = table.concat(selectedList, ", ")
-                    end
+                    SelectedTxt.Text = tostring(DropObj.Value)
                 end
-                Fluent.ConfigData[id] = DropdownObj.Value
-                writefile_safe(FolderName, FileName, Fluent.ConfigData)
+                SaveConfig()
+                if DropObj.ChangeCallback then DropObj.ChangeCallback(DropObj.Value) end
             end
-            
-            for index, valName in pairs(Values) do
-                local OptBtn = Instance.new("TextButton")
-                OptBtn.Size = UDim2.new(1, 0, 0, 26)
-                OptBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-                OptBtn.Text = "  " .. tostring(valName)
-                OptBtn.TextColor3 = Fluent.Themes.Darker.SubText
-                OptBtn.Font = Enum.Font.SourceSans
-                OptBtn.TextSize = 13
-                OptBtn.TextXAlignment = Enum.TextXAlignment.Left
-                OptBtn.Parent = OptionContainer
+
+            local function ToggleOpen()
+                IsOpen = not IsOpen
+                local targetHeight = IsOpen and math.clamp(#DropObj.Values * 28 + 52, 42, 200) or 42
+                TS:Create(DFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, -10, 0, targetHeight)}):Play()
+                Arrow.Text = IsOpen and "▲" or "▼"
+                OptionList.CanvasSize = UDim2.new(0,0,0, olayout.AbsoluteContentSize.Y + 5)
+            end
+            ClickBtn.MouseButton1Click:Connect(ToggleOpen)
+
+            function DropObj:BuildOptions()
+                for _, item in ipairs(OptionList:GetChildren()) do if item:IsA("TextButton") then item:Destroy() end end
                 
-                local OCorner = Instance.new("UICorner")
-                OCorner.CornerRadius = UDim.new(0, 4)
-                OCorner.Parent = OptBtn
-                
-                if Multi and typeof(DropdownObj.Value) == "table" and DropdownObj.Value[valName] then
-                    OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
-                elseif not Multi and DropdownObj.Value == index then
-                    OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
-                end
-                
-                OptBtn.MouseButton1Click:Connect(function()
-                    if not Multi then
-                        DropdownObj.Value = index
-                        for _, btn in pairs(OptionContainer:GetChildren()) do
-                            if btn:IsA("TextButton") then btn.TextColor3 = Fluent.Themes.Darker.SubText end
-                        end
-                        OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
-                        Open = false
-                        
-                        TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 42)}):Play()
-                        RefreshDisplay()
-                        DropdownObj.ChangedCallback(DropdownObj.Value)
+                for _, val in ipairs(DropObj.Values) do
+                    local OBtn = Instance.new("TextButton")
+                    OBtn.Size = UDim2.new(1, 0, 0, 26) OBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+                    OBtn.Text = "  " .. val OBtn.TextColor3 = Fynix.Themes.Darker.Sub OBtn.Font = Enum.Font.SourceSans
+                    OBtn.TextSize = 13 OBtn.TextXAlignment = Enum.TextXAlignment.Left OBtn.Parent = OptionList
+                    local oc = Instance.new("UICorner") oc.CornerRadius = UDim.new(0, 4) oc.Parent = OBtn
+
+                    if DropObj.Multi then
+                        if type(DropObj.Value) ~= "table" then DropObj.Value = {} end
+                        if DropObj.Value[val] then OBtn.TextColor3 = Fynix.Themes.Darker.G1 end
                     else
-                        if typeof(DropdownObj.Value) ~= "table" then DropdownObj.Value = {} end
-                        DropdownObj.Value[valName] = not DropdownObj.Value[valName]
-                        if DropdownObj.Value[valName] then
-                            OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
+                        if DropObj.Value == val then OBtn.TextColor3 = Fynix.Themes.Darker.G1 end
+                    end
+
+                    OBtn.MouseButton1Click:Connect(function()
+                        if DropObj.Multi then
+                            DropObj.Value[val] = not DropObj.Value[val]
+                            OBtn.TextColor3 = DropObj.Value[val] and Fynix.Themes.Darker.G1 or Fynix.Themes.Darker.Sub
                         else
-                            OptBtn.TextColor3 = Fluent.Themes.Darker.SubText
+                            DropObj.Value = val
+                            ToggleOpen()
+                            for _, b in ipairs(OptionList:GetChildren()) do if b:IsA("TextButton") then b.TextColor3 = Fynix.Themes.Darker.Sub end end
+                            OBtn.TextColor3 = Fynix.Themes.Darker.G1
                         end
                         RefreshDisplay()
-                        DropdownObj.ChangedCallback(DropdownObj.Value)
-                    end
-                end)
+                    end)
+                end
             end
-            
-            -- Ép TabPage phải cập nhật Layout khi Dropdown đang thực hiện hiệu ứng đóng/mở rộng
-            local function ToggleDropdown()
-                Open = not Open
-                local targetSize = Open and UDim2.new(1, 0, 0, 50 + (#Values * 28) + 10) or UDim2.new(1, 0, 0, 42)
-                
-                local tween = TweenService:Create(DropFrame, TweenInfo.new(0.25, Enum.EasingStyle.QuartOut), {Size = targetSize})
-                tween:Play()
-                
-                local connection
-                connection = RunService.Heartbeat:Connect(function()
-                    if tween.PlaybackState == Enum.TweenStatus.Playing then
-                        -- Buộc UIListLayout cha sắp xếp lại danh sách ngay lập tức
-                        PageLayout.Enabled = false
-                        PageLayout.Enabled = true
-                    else
-                        connection:Disconnect()
-                    end
-                end)
+
+            function DropObj:OnChanged(cb) DropObj.ChangeCallback = cb cb(DropObj.Value) end
+            function DropObj:SetValue(v)
+                if DropObj.Multi and type(v) == "table" then
+                    DropObj.Value = v
+                elseif DropObj.Multi and type(v) == "string" then
+                    DropObj.Value = {[v] = true}
+                else
+                    DropObj.Value = v
+                end
+                DropObj:BuildOptions()
+                RefreshDisplay()
             end
-            
-            SelectionDisplay.MouseButton1Click:Connect(ToggleDropdown)
+
+            -- Thiết lập giá trị Multi dạng table nếu đầu vào mặc định là mảng string
+            if dCfg.Multi and type(dCfg.Default) == "table" then
+                DropObj.Value = {}
+                for _, v in ipairs(dCfg.Default) do DropObj.Value[v] = true end
+            end
+
+            DropObj:BuildOptions()
             RefreshDisplay()
-            
-            function DropdownObj:OnChanged(cb)
-                DropdownObj.ChangedCallback = cb
-                cb(DropdownObj.Value)
-            end
-            
-            return DropdownObj
+            Fynix.Options[id] = DropObj
+            return DropObj
         end
-        
-        WindowObj.Tabs[TabTitle] = TabObj
+
         return TabObj
     end
-    
+
+    task.spawn(LoadConfig)
     return WindowObj
 end
 
+return Fynix
