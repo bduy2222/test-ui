@@ -1,12 +1,10 @@
--- [[ THƯ VIỆN UI CHUYÊN NGHIỆP - REMAKE FLUENT STYLE ]]
+-- [[ THƯ VIỆN UI CHUYÊN NGHIỆP - FIXED DROPDOWN CORES ]]
 -- Tác giả: .matjias
--- Hỗ trợ đầy đủ các Executor hiện nay (Arceus X, Vega X, Fluxus, Delta, Wave, Solara,...)
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 local Fluent = {
@@ -24,12 +22,11 @@ local Fluent = {
             ToggleOff = Color3.fromRGB(60, 60, 65)
         }
     },
-    CurrentNotification = nil,
     ActiveNotifications = {},
     ConfigData = {}
 }
 
--- Khởi tạo môi trường lưu file tự động
+-- Hệ thống quản lý File Config
 local function writefile_safe(folder, file, data)
     if writefile and makefolder then
         pcall(function()
@@ -49,7 +46,7 @@ local function readfile_safe(folder, file)
     return nil
 end
 
--- [[ HIỆU ỨNG SÓNG GRADIENT WAVE ANIMAITON ]]
+-- Hiệu ứng sóng Gradient chuyển động thời gian thực
 local function ApplyGradientWave(uiObject)
     local UIGradient = Instance.new("UIGradient")
     UIGradient.Color = ColorSequence.new({
@@ -69,7 +66,7 @@ local function ApplyGradientWave(uiObject)
     end)
 end
 
--- [[ HỆ THỐNG THÔNG BÁO TỰ ĐỘNG TWEEN XẾP CHỒNG ]]
+-- Hệ thống Notification xếp chồng thông minh
 function Fluent:Notify(cfg)
     local TitleText = cfg.Title or "Notification"
     local ContentText = cfg.Content or ""
@@ -77,11 +74,12 @@ function Fluent:Notify(cfg)
     local Duration = cfg.Duration or nil
     
     local CoreGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-    local TargetGui = CoreGui:FindFirstChild("FluentUIFrame") or CoreGui:FindFirstChildOfClass("ScreenGui")
+    local TargetGui = CoreGui:FindFirstChild("FluentUIFrame")
+    if not TargetGui then return end
     
     local NotifyFrame = Instance.new("Frame")
     NotifyFrame.Size = UDim2.new(0, 260, 0, 75)
-    NotifyFrame.Position = UDim2.new(1, 300, 0.85, 0) -- Xuất hiện từ rìa phải màn hình
+    NotifyFrame.Position = UDim2.new(1, 300, 0.85, 0)
     NotifyFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
     NotifyFrame.BorderSizePixel = 0
     NotifyFrame.Parent = TargetGui
@@ -130,7 +128,6 @@ function Fluent:Notify(cfg)
         nSub.Parent = NotifyFrame
     end
 
-    -- Đẩy các thông báo cũ lên trên
     for _, activeNotify in pairs(Fluent.ActiveNotifications) do
         if activeNotify and activeNotify.Parent then
             local currentPos = activeNotify.Position
@@ -142,26 +139,27 @@ function Fluent:Notify(cfg)
     
     table.insert(Fluent.ActiveNotifications, NotifyFrame)
     
-    -- Animation xuất hiện (Tween In)
     TweenService:Create(NotifyFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Position = UDim2.new(1, -280, 0.85, 0)
     }):Play()
     
-    -- Xử lý vòng đời biến mất
     if Duration then
         task.delay(Duration, function()
-            TweenService:Create(NotifyFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-                Position = UDim2.new(1, 300, NotifyFrame.Position.Y.Scale, NotifyFrame.Position.Y.Offset),
-                BackgroundTransparency = 1
-            }):Play()
-            task.wait(0.3)
-            table.remove(Fluent.ActiveNotifications, table.find(Fluent.ActiveNotifications, NotifyFrame))
-            NotifyFrame:Destroy()
+            if NotifyFrame and NotifyFrame.Parent then
+                TweenService:Create(NotifyFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                    Position = UDim2.new(1, 300, NotifyFrame.Position.Y.Scale, NotifyFrame.Position.Y.Offset),
+                    BackgroundTransparency = 1
+                }):Play()
+                task.wait(0.3)
+                local idx = table.find(Fluent.ActiveNotifications, NotifyFrame)
+                if idx then table.remove(Fluent.ActiveNotifications, idx) end
+                NotifyFrame:Destroy()
+            end
         end)
     end
 end
 
--- [[ KHỞI TẠO CỬA SỔ WINDOWS CHÍNH ]]
+-- Hàm khởi tạo Cửa sổ chính
 function Fluent:CreateWindow(settings)
     local WindowName = settings.Title or "UI Library"
     local SubTitleText = settings.SubTitle or "by Studio"
@@ -171,7 +169,6 @@ function Fluent:CreateWindow(settings)
     local FileName = settings.Config and settings.Config.File or "default"
     local MinimizeKey = settings.MinimizeKey or Enum.KeyCode.LeftControl
     
-    -- Nạp lại dữ liệu đã lưu nếu có
     Fluent.ConfigData = readfile_safe(FolderName, FileName) or {}
     
     local ScreenGui = Instance.new("ScreenGui")
@@ -192,7 +189,6 @@ function Fluent:CreateWindow(settings)
     MainCorner.CornerRadius = UDim.new(0, 8)
     MainCorner.Parent = MainFrame
     
-    -- Thanh Topbar phía trên cùng
     local Topbar = Instance.new("Frame")
     Topbar.Size = UDim2.new(1, 0, 0, 40)
     Topbar.BackgroundColor3 = Fluent.Themes.Darker.Topbar
@@ -203,7 +199,6 @@ function Fluent:CreateWindow(settings)
     TopCorner.CornerRadius = UDim.new(0, 8)
     TopCorner.Parent = Topbar
     
-    -- Sóng hiệu ứng Gradient trang trí dưới Topbar
     local WaveLine = Instance.new("Frame")
     WaveLine.Size = UDim2.new(1, 0, 0, 2)
     WaveLine.Position = UDim2.new(0, 0, 1, -2)
@@ -223,7 +218,6 @@ function Fluent:CreateWindow(settings)
     TitleLabel.BackgroundTransparency = 1
     TitleLabel.Parent = Topbar
     
-    -- Cấu trúc phân vùng Sidebar (Trái) & Content (Phải)
     local Sidebar = Instance.new("ScrollingFrame")
     Sidebar.Size = UDim2.new(0, TabWidth, 1, -40)
     Sidebar.Position = UDim2.fromOffset(0, 40)
@@ -250,7 +244,6 @@ function Fluent:CreateWindow(settings)
     Container.BackgroundTransparency = 1
     Container.Parent = MainFrame
 
-    -- Đóng mở UI bằng phím tắt
     UserInputService.InputBegan:Connect(function(input, gpe)
         if not gpe and input.KeyCode == MinimizeKey then
             ScreenGui.Enabled = not ScreenGui.Enabled
@@ -259,7 +252,6 @@ function Fluent:CreateWindow(settings)
     
     local WindowObj = { CurrentTab = nil, Tabs = {} }
     
-    -- [[ TẠO TAB ]]
     function WindowObj:AddTab(tabCfg)
         local TabTitle = tabCfg.Title or "Tab"
         local TabIcon = tabCfg.Icon or ""
@@ -284,12 +276,10 @@ function Fluent:CreateWindow(settings)
         PagePadding.PaddingRight = UDim.new(0, 12)
         PagePadding.Parent = TabPage
         
-        -- Cập nhật tự động vùng cuộn khi có phần tử mới
         PageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             TabPage.CanvasSize = UDim2.new(0, 0, 0, PageLayout.AbsoluteContentSize.Y + 25)
         end)
         
-        -- Nút bấm Tab ở thanh Sidebar
         local TabButton = Instance.new("TextButton")
         TabButton.Size = UDim2.new(1, 0, 0, 34)
         TabButton.BackgroundColor3 = Color3.fromRGB(0,0,0)
@@ -326,7 +316,7 @@ function Fluent:CreateWindow(settings)
         
         local TabObj = {}
         
-        -- [[ COMPONENT: PARAGRAPH ]]
+        -- [[ PARAGRAPH COMPONENT ]]
         function TabObj:AddParagraph(pCfg)
             local PTitle = pCfg.Title or "Paragraph"
             local PContent = pCfg.Content or ""
@@ -370,7 +360,7 @@ function Fluent:CreateWindow(settings)
             return PInteract
         end
         
-        -- [[ COMPONENT: BUTTON ]]
+        -- [[ BUTTON COMPONENT ]]
         function TabObj:AddButton(bCfg)
             local BTitle = bCfg.Title or "Button"
             local BDesc = bCfg.Description or ""
@@ -420,7 +410,7 @@ function Fluent:CreateWindow(settings)
             end)
         end
         
-        -- [[ COMPONENT: TOGGLE (ANIMATION STYLE TELEPHONE INTERFACE - iOS) ]]
+        -- [[ TOGGLE COMPONENT (iOS ANIMATION) ]]
         function TabObj:AddToggle(id, tCfg)
             local TTitle = tCfg.Title or "Toggle"
             local Default = Fluent.ConfigData[id] ~= nil and Fluent.ConfigData[id] or (tCfg.Default or false)
@@ -445,7 +435,6 @@ function Fluent:CreateWindow(settings)
             TextLabel.BackgroundTransparency = 1
             TextLabel.Parent = TFrame
             
-            -- Khung Switch nền iOS
             local Switch = Instance.new("TextButton")
             Switch.Size = UDim2.new(0, 42, 0, 22)
             Switch.Position = UDim2.new(1, -54, 0.5, -11)
@@ -457,7 +446,6 @@ function Fluent:CreateWindow(settings)
             SCorner.CornerRadius = UDim.new(1, 0)
             SCorner.Parent = Switch
             
-            -- Viên tròn chuyển động ở trong (iOS Ball)
             local Circle = Instance.new("Frame")
             Circle.Size = UDim2.new(0, 16, 0, 16)
             Circle.Position = Default and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
@@ -497,10 +485,9 @@ function Fluent:CreateWindow(settings)
             return ToggleObj
         end
         
-        -- [[ COMPONENT: SLIDER ]]
+        -- [[ SLIDER COMPONENT ]]
         function TabObj:AddSlider(id, sCfg)
             local STitle = sCfg.Title or "Slider"
-            local SDesc = sCfg.Description or ""
             local Min = sCfg.Min or 0
             local Max = sCfg.Max or 100
             local Rounding = sCfg.Rounding or 1
@@ -526,7 +513,6 @@ function Fluent:CreateWindow(settings)
             Label.BackgroundTransparency = 1
             Label.Parent = SFrame
             
-            -- Khung nhập & hiển thị dữ liệu tập trung ở cuối dòng
             local InputBox = Instance.new("TextBox")
             InputBox.Size = UDim2.new(0, 45, 0, 20)
             InputBox.Position = UDim2.new(1, -57, 0, 6)
@@ -541,7 +527,6 @@ function Fluent:CreateWindow(settings)
             IBCorner.CornerRadius = UDim.new(0, 4)
             IBCorner.Parent = InputBox
             
-            -- Thanh trượt (Slider Track)
             local Track = Instance.new("Frame")
             Track.Size = UDim2.new(1, -24, 0, 4)
             Track.Position = UDim2.new(0, 12, 1, -12)
@@ -573,7 +558,6 @@ function Fluent:CreateWindow(settings)
                 SliderObj.ChangedCallback(roundedValue)
             end
             
-            -- Logic xử lý tương tác chuột trên thanh trượt
             local IsDragging = false
             Track.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -598,7 +582,6 @@ function Fluent:CreateWindow(settings)
                 end
             end)
             
-            -- Logic xử lý khi người dùng trực tiếp nhập số vào ô hiển thị
             InputBox.FocusLost:Connect(function()
                 local num = tonumber(InputBox.Text)
                 if num then
@@ -618,13 +601,12 @@ function Fluent:CreateWindow(settings)
             return SliderObj
         end
         
-       -- [[ COMPONENT: DROPDOWN & MULTI DROPDOWN - FIXED ]]
+        -- [[ DROPDOWN COMPONENT (FIXED CRASH) ]]
         function TabObj:AddDropdown(id, dCfg)
             local DTitle = dCfg.Title or "Dropdown"
             local Values = dCfg.Values or {}
             local Multi = dCfg.Multi or false
             
-            -- SỬA LOGIC KHỞI TẠO DEFAULT KHÔNG BỊ SAI KIỂU DỮ LIỆU
             local Default = Fluent.ConfigData[id]
             if Default == nil then
                 if Multi then
@@ -706,7 +688,6 @@ function Fluent:CreateWindow(settings)
                 writefile_safe(FolderName, FileName, Fluent.ConfigData)
             end
             
-            -- Xây dựng các Option Item bên trong
             for index, valName in pairs(Values) do
                 local OptBtn = Instance.new("TextButton")
                 OptBtn.Size = UDim2.new(1, 0, 0, 26)
@@ -722,7 +703,6 @@ function Fluent:CreateWindow(settings)
                 OCorner.CornerRadius = UDim.new(0, 4)
                 OCorner.Parent = OptBtn
                 
-                -- Kiểm tra bôi màu phần tử được chọn ban đầu
                 if Multi and typeof(DropdownObj.Value) == "table" and DropdownObj.Value[valName] then
                     OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
                 elseif not Multi and DropdownObj.Value == index then
@@ -738,9 +718,7 @@ function Fluent:CreateWindow(settings)
                         OptBtn.TextColor3 = Fluent.Themes.Darker.Accent
                         Open = false
                         
-                        local t = TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 42)})
-                        t:Play()
-                        
+                        TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 42)}):Play()
                         RefreshDisplay()
                         DropdownObj.ChangedCallback(DropdownObj.Value)
                     else
@@ -757,27 +735,20 @@ function Fluent:CreateWindow(settings)
                 end)
             end
             
-            -- [THAY ĐỔI QUAN TRỌNG]: ÉP CANVAS VÀ LAYOUT CỦA TABPAGE PHẢI TÍNH LẠI DIỆN TÍCH KHI ĐANG TWEEN
+            -- Ép TabPage phải cập nhật Layout khi Dropdown đang thực hiện hiệu ứng đóng/mở rộng
             local function ToggleDropdown()
                 Open = not Open
-                local targetSize
-                if Open then
-                    -- Tính toán chính xác độ cao cần mở rộng dựa vào số lượng Item
-                    targetSize = UDim2.new(1, 0, 0, 50 + (#Values * 28) + 10)
-                else
-                    targetSize = UDim2.new(1, 0, 0, 42)
-                end
+                local targetSize = Open and UDim2.new(1, 0, 0, 50 + (#Values * 28) + 10) or UDim2.new(1, 0, 0, 42)
                 
                 local tween = TweenService:Create(DropFrame, TweenInfo.new(0.25, Enum.EasingStyle.QuartOut), {Size = targetSize})
                 tween:Play()
                 
-                -- Vòng lặp siêu nhỏ ép giao diện chính thay đổi CanvasSize liên tục cho tới khi Tween xong hẳn (Tránh kẹt UI)
                 local connection
                 connection = RunService.Heartbeat:Connect(function()
                     if tween.PlaybackState == Enum.TweenStatus.Playing then
-                        -- Kích hoạt ép Layout cha reload vị trí nút bấm liền kề bên dưới
-                        PageLayout:AddTag("ForcedUpdate")
-                        PageLayout:RemoveTag("ForcedUpdate")
+                        -- Buộc UIListLayout cha sắp xếp lại danh sách ngay lập tức
+                        PageLayout.Enabled = false
+                        PageLayout.Enabled = true
                     else
                         connection:Disconnect()
                     end
@@ -785,7 +756,6 @@ function Fluent:CreateWindow(settings)
             end
             
             SelectionDisplay.MouseButton1Click:Connect(ToggleDropdown)
-            
             RefreshDisplay()
             
             function DropdownObj:OnChanged(cb)
@@ -803,4 +773,3 @@ function Fluent:CreateWindow(settings)
     return WindowObj
 end
 
-return Fluent
